@@ -1,0 +1,42 @@
+services:
+
+  db:
+    image: postgres:15
+    container_name: warehouse-control-db
+    restart: always
+    environment:
+      POSTGRES_USER: warehouse-control-user
+      POSTGRES_PASSWORD: 3356
+      POSTGRES_DB: warehouse_control_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U warehouse-control-user -d warehouse_control_user" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    volumes:
+      - ./config:/app/config
+      - ./static:/app/static
+    environment:
+      CONFIG_PATH: "/app/config/local.yml"
+
+  migrate:
+    image: migrate/migrate
+    depends_on:
+      - db
+    command: [ "-path", "/migrations", "-database", "postgres://warehouse-control-user:3356@db:5432/warehouse_control_db?sslmode=disable", "up" ]
+    volumes:
+      - ./migrations:/migrations
+
+volumes:
+  db-data:

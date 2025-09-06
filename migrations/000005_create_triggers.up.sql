@@ -1,0 +1,3 @@
+CREATE TRIGGER item_change_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON items
+    FOR EACH ROW EXECUTE FUNCTION log_item_change();

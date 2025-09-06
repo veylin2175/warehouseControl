@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS item_change_trigger ON items;

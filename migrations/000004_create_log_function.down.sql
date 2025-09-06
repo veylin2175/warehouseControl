@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS log_item_change();
