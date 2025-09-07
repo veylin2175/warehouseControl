@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE item_history
 (
     id         SERIAL PRIMARY KEY,

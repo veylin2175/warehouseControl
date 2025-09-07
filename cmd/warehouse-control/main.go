@@ -2,6 +2,8 @@ package main
 
 import (
 	"WarehouseControl/internal/config"
+	"WarehouseControl/internal/http-server/handlers"
+	authMiddleware "WarehouseControl/internal/http-server/handlers/middleware"
 	"WarehouseControl/internal/http-server/middleware/mwlogger"
 	"WarehouseControl/internal/lib/logger/handlers/slogpretty"
 	"WarehouseControl/internal/lib/logger/sl"
@@ -36,12 +38,52 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Инициализация репозиториев
+	userStorage := postgres.NewUserStorage(storage.DB)
+	itemStorage := postgres.NewItemStorage(storage.DB)
+	historyStorage := postgres.NewHistoryStorage(storage.DB)
+
+	// Инициализация хендлеров
+	authHandler := handlers.NewAuthHandler(userStorage, "secret-key", log)
+	itemsHandler := handlers.NewItemsHandler(itemStorage, log)
+	historyHandler := handlers.NewHistoryHandler(historyStorage, log)
+
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
 	router.Use(mwlogger.New(log))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
+
+	// Раздача статических файлов
+	fs := http.FileServer(http.Dir("./static/"))
+	router.Handle("/static/*", http.StripPrefix("/static/", fs))
+
+	// Главная страница - проверяем авторизацию через JS
+	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./static/index.html")
+	})
+
+	// Страница логина
+	router.Get("/login.html", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./static/login.html")
+	})
+
+	// Публичные API маршруты
+	router.Post("/login", authHandler.Login)
+
+	// Защищенные API маршруты - применяем middleware
+	router.Group(func(r chi.Router) {
+		r.Use(authMiddleware.AuthMiddleware("secret-key", log))
+
+		r.Post("/items", itemsHandler.CreateItem)
+		r.Get("/items", itemsHandler.GetAllItems)
+		r.Get("/items/{id}", itemsHandler.GetItemByID)
+		r.Put("/items/{id}", itemsHandler.UpdateItem)
+		r.Delete("/items/{id}", itemsHandler.DeleteItem)
+		r.Get("/history", historyHandler.GetAllHistory)
+		r.Get("/history/{id}", historyHandler.GetHistoryByItemID)
+	})
 
 	log.Info("starting server", slog.String("address", cfg.HTTPServer.Address))
 

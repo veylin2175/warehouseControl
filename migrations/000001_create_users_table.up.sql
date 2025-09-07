@@ -7,4 +7,4 @@ CREATE TABLE users
 );
 
 INSERT INTO users (username, password_hash, role)
-VALUES ('admin', '$2a$10$8K1p/a0dURXAm7QiTRqUzuN0/S5Wk2y7Pb6aDQ5K8N4B5ewYnK5vO', 'admin');
+VALUES ('admin', '$2a$10$AO3opEdtEYoNYXJqxImcceq1f/iIvPGmNg8u13fWUDWCtrS4TYsiq', 'admin');

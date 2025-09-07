@@ -24,17 +24,25 @@ func NewItemStorage(db *sql.DB) *ItemStorage {
 }
 
 func (s *ItemStorage) CreateItem(ctx context.Context, item *models.Item, changedBy string) error {
-	_, err := s.db.ExecContext(ctx, "SET LOCAL app.user = $1", changedBy)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Используем форматирование строки вместо параметризованного запроса
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("SET LOCAL app.username = '%s'", changedBy))
 	if err != nil {
 		return fmt.Errorf("failed to set user context: %w", err)
 	}
 
 	query := `INSERT INTO items (name, quantity) VALUES ($1, $2) RETURNING id, created_at, updated_at`
-	err = s.db.QueryRowContext(ctx, query, item.Name, item.Quantity).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
+	err = tx.QueryRowContext(ctx, query, item.Name, item.Quantity).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create item: %w", err)
 	}
-	return nil
+
+	return tx.Commit()
 }
 
 func (s *ItemStorage) GetAllItems(ctx context.Context) ([]*models.Item, error) {
@@ -48,7 +56,7 @@ func (s *ItemStorage) GetAllItems(ctx context.Context) ([]*models.Item, error) {
 	var items []*models.Item
 	for rows.Next() {
 		var item models.Item
-		err = rows.Scan(&item.ID, &item.Name, &item.Quantity, &item.CreatedAt, &item.UpdatedAt)
+		err := rows.Scan(&item.ID, &item.Name, &item.Quantity, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan item: %w", err)
 		}
@@ -75,30 +83,45 @@ func (s *ItemStorage) GetItemByID(ctx context.Context, id int) (*models.Item, er
 }
 
 func (s *ItemStorage) UpdateItem(ctx context.Context, item *models.Item, changedBy string) error {
-\	_, err := s.db.ExecContext(ctx, "SET LOCAL app.user = $1", changedBy)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Используем форматирование строки вместо параметризованного запроса
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("SET LOCAL app.username = '%s'", changedBy))
 	if err != nil {
 		return fmt.Errorf("failed to set user context: %w", err)
 	}
 
 	query := `UPDATE items SET name = $1, quantity = $2, updated_at = NOW() WHERE id = $3 RETURNING updated_at`
-	err = s.db.QueryRowContext(ctx, query, item.Name, item.Quantity, item.ID).Scan(&item.UpdatedAt)
+	err = tx.QueryRowContext(ctx, query, item.Name, item.Quantity, item.ID).Scan(&item.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("item not found")
 		}
 		return fmt.Errorf("failed to update item: %w", err)
 	}
-	return nil
+
+	return tx.Commit()
 }
 
 func (s *ItemStorage) DeleteItem(ctx context.Context, id int, changedBy string) error {
-	_, err := s.db.ExecContext(ctx, "SET LOCAL app.user = $1", changedBy)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Используем форматирование строки вместо параметризованного запроса
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("SET LOCAL app.username = '%s'", changedBy))
 	if err != nil {
 		return fmt.Errorf("failed to set user context: %w", err)
 	}
 
 	query := `DELETE FROM items WHERE id = $1`
-	result, err := s.db.ExecContext(ctx, query, id)
+	result, err := tx.ExecContext(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete item: %w", err)
 	}
@@ -112,5 +135,5 @@ func (s *ItemStorage) DeleteItem(ctx context.Context, id int, changedBy string) 
 		return fmt.Errorf("item not found")
 	}
 
-	return nil
+	return tx.Commit()
 }
